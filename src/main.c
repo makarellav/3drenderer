@@ -1,16 +1,25 @@
 #include <SDL2/SDL.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 
-bool init_window(void);
-void setup(void);
-void process_input(void);
-void update(void);
-void render(void);
+#include "display.h"
+#include "vector.h"
 
-SDL_Window *window;
-SDL_Renderer *renderer;
+#define N_POINTS (9 * 9 * 9)
+
+void update(void);
+void process_input(void);
+void setup(void);
+void render(void);
+vec2_t project(vec3_t point);
+
 bool is_running;
+
+const int FOV_FACTOR = 256;
+
+vec3_t cube_points[N_POINTS];
+vec2_t projected_points[N_POINTS];
 
 int main(void) {
     is_running = init_window();
@@ -23,38 +32,32 @@ int main(void) {
         render();
     }
 
+    destroy_window();
+
     return 0;
 }
 
-bool init_window(void) {
-    if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
-        fprintf(stderr, "error initializing SDL\n");
+void setup(void) {
+    color_buffer =
+        (uint32_t *)malloc(window_width * window_height * sizeof(uint32_t));
 
-        return false;
+    color_buffer_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
+                                             SDL_TEXTUREACCESS_STREAMING,
+                                             window_width, window_height);
+
+    int current_point = 0;
+
+    for (float x = -1; x <= 1; x += 0.25) {
+        for (float y = -1; y <= 1; y += 0.25) {
+            for (float z = -1; z <= 1; z += 0.25) {
+                vec3_t point = {x, y, z};
+                cube_points[current_point] = point;
+
+                current_point++;
+            }
+        }
     }
-
-    window =
-        SDL_CreateWindow(NULL, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                         1280, 960, SDL_WINDOW_BORDERLESS);
-
-    if (!window) {
-        fprintf(stderr, "error creating SDL window\n");
-
-        return false;
-    }
-
-    renderer = SDL_CreateRenderer(window, -1, 0);
-
-    if (!renderer) {
-        fprintf(stderr, "error creating SDL renderer\n");
-
-        return false;
-    }
-
-    return true;
 }
-
-void setup(void) {};
 void process_input(void) {
     SDL_Event event;
 
@@ -73,10 +76,29 @@ void process_input(void) {
             break;
     }
 };
-void update(void) {};
+
+void update(void) {
+    for (int i = 0; i < N_POINTS; i++) {
+        projected_points[i] = project(cube_points[i]);
+    }
+};
+
 void render(void) {
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-    SDL_RenderClear(renderer);
+    clear_color_buffer(0xFF000000);
+    draw_grid(0xFF484848);
+    for (int i = 0; i < N_POINTS; i++) {
+        vec2_t point = projected_points[i];
+
+        draw_rect(point.x + window_width / 2, point.y + window_height / 2, 4, 4,
+                  0xFFFFFF00);
+    }
+    render_color_buffer();
 
     SDL_RenderPresent(renderer);
 };
+
+vec2_t project(vec3_t point) {
+    vec2_t projected_point = {(FOV_FACTOR * point.x), (FOV_FACTOR * point.y)};
+
+    return projected_point;
+}
